@@ -1,4 +1,3 @@
-// client/src/context/AuthContext.jsx
 import React, { createContext, useState, useEffect } from 'react';
 
 export const AuthContext = createContext();
@@ -10,8 +9,9 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
-        // Extra validation check: "undefined" ya empty text string controller crash handle karein
-        if (storedUser && storedUser !== "undefined" && token) {
+        const storedToken = localStorage.getItem('token');
+        
+        if (storedUser && storedUser !== "undefined" && storedToken) {
             try {
                 setUser(JSON.parse(storedUser));
             } catch (error) {
@@ -22,15 +22,17 @@ export const AuthProvider = ({ children }) => {
         setLoading(false);
     }, [token]);
 
-    // Login function to save state session
+    // Login function to save state session safely
     const login = (userData, userToken) => {
         localStorage.setItem('token', userToken);
         localStorage.setItem('user', JSON.stringify(userData));
+        
+        // 🔥 ORDER COUNTS: Token setting triggers user assignment matrix reconstruction
         setToken(userToken);
         setUser(userData);
     };
 
-    // Logout function to clear session
+    // Logout function to clear session securely
     const logout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
@@ -40,7 +42,6 @@ export const AuthProvider = ({ children }) => {
 
     return (
         <AuthContext.Provider value={{ user, token, login, logout, loading, setUser, setToken }}>
-            {/* Direct children return block to prevent route context locking */}
             {children}
         </AuthContext.Provider>
     );

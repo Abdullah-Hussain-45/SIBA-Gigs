@@ -1,34 +1,38 @@
-
 import Bid from '../models/Bid.js';
 import Job from '../models/Job.js';
+import Notification from '../models/Notification.js'; 
+import { sendRealTimeNotification } from '../config/socket.js';
 
 export const createBid = async (req, res) => {
-    const { jobId, bidAmount, deliveryDays, proposalText } = req.body;
-    
     try {
-        // Find the job to verify the owner
+        const { jobId, bidAmount, deliveryDays, proposalText } = req.body;
+
         const job = await Job.findById(jobId);
         if (!job) {
             return res.status(404).json({ success: false, message: "Target assignment node not found." });
         }
 
-        // 🔥 RULE 1: Strict Role Validation
         if (req.user.role !== 'freelancer') {
             return res.status(403).json({ success: false, message: "Security Violation: Only certified freelancers can submit bids." });
         }
 
-        // 🔥 RULE 2: Anti-Self Bidding Guardrail
-        if (job.clientId.toString() === req.user.id.toString()) {
-            return res.status(400).json({ success: false, message: "Operation Aborted: You cannot submit a proposal to your own posted assignment." });
+        const rawJob = job.toObject();
+        const jobOwnerId = job.clientId || job.userId || job.postedBy || job.studentId || rawJob.user || rawJob.client;
+
+        // 1. UNIQUE BID CHECK
+        const allBidsForThisJob = await Bid.find({ jobId: jobId });
+        const alreadyBid = allBidsForThisJob.some(
+            (bid) => String(bid.freelancerId) === String(req.user.id)
+        );
+
+        if (alreadyBid) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "You have already submitted a proposal for this assignment."
+            });
         }
 
-        // Check if freelancer already bid on this task
-        const existingBid = await Bid.findOne({ jobId, freelancerId: req.user.id });
-        if (existingBid) {
-            return res.status(400).json({ success: false, message: "You have already submitted a proposal for this task." });
-        }
-
-        // Create and save the new bid
+        // 2. CREATE NEW BID ENTRY
         const newBid = await Bid.create({
             jobId,
             freelancerId: req.user.id,
@@ -37,10 +41,32 @@ export const createBid = async (req, res) => {
             proposalText
         });
 
-        res.status(201).json({ success: true, message: "Proposal successfully registered!", record: newBid });
+        // 3. NOTIFICATION DISPATCH PIPELINE (For Online/Offline Students)
+        const notificationMessage = `A new bid of Rs. ${bidAmount} has been generated on your assignment!`;
+        if (jobOwnerId) {
+            // STEP A: ALWAYS SAVE TO DATABASE (For Offline System Cache)
+            await Notification.create({
+                recipientId: jobOwnerId,
+                message: notificationMessage,
+                jobId: job._id
+            });
 
-    } catch (err) {
-        console.error("Bid Creation Error:", err.message);
-        res.status(500).json({ success: false, message: "Internal server validation failure." });
+            // STEP B: SEND LIVE SOCKET PUSH (If Student is Online right now)
+            sendRealTimeNotification(jobOwnerId.toString(), 'new_bid_received', {
+                message: notificationMessage,
+                jobId: job._id
+            });
+        }
+
+        // 4. CLEAN SINGLE RETURN STATEMENT
+        return res.status(201).json({
+            success: true,
+            message: "Proposal successfully registered and dispatched!",
+            bid: newBid
+        });
+
+    } catch (error) {
+        console.error("Bid Creation Failure:", error.message);
+        return res.status(500).json({ success: false, error: error.message });
     }
 };

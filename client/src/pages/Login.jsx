@@ -53,14 +53,14 @@ export default function Login() {
                 
                 <form className="space-y-4" onSubmit={handleLogin}>
                     <div>
-                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Campus Email</label>
+                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Email</label>
                         <input type="email" required className="w-full mt-1 px-4 py-3 bg-[#1f1f26] border border-[#2e2e38] rounded-lg text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors" placeholder="username@iba-suk.edu.pk" value={email} onChange={e => setEmail(e.target.value)} />
                     </div>
                     
                     <div>
                         {/* Label aur Forgot Password link ko ek hi line mein flex kiya hai */}
                         <div className="flex justify-between items-center">
-                            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Security Password</label>
+                            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Password</label>
                             <Link to="/forgot-password" className="text-xs text-red-400 hover:underline hover:text-red-300 transition-colors">
                                 Forgot password?
                             </Link>
@@ -68,7 +68,7 @@ export default function Login() {
                         <input type="password" required className="w-full mt-1 px-4 py-3 bg-[#1f1f26] border border-[#2e2e38] rounded-lg text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} />
                     </div>
 
-                    <button type="submit" className="w-full mt-2 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg text-sm transition-colors shadow-lg shadow-emerald-900/20">Authorize Terminal</button>
+                    <button type="submit" className="w-full mt-2 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg text-sm transition-colors shadow-lg shadow-emerald-900/20">Login</button>
                 </form>
                 
                 <p className="mt-6 text-center text-xs text-gray-500">

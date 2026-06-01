@@ -7,6 +7,7 @@ import ForgotPassword from './pages/ForgotPassword.jsx';
 import MyGigs from './pages/History.jsx';
 import History from './pages/History.jsx';
 import Profile from './pages/Profile.jsx';
+import AdminDashboard from './pages/AdminDashboard.jsx';
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
         <Route path="/my-gigs" element={<MyGigs />} />
         <Route path="/history" element={<History />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/admin-portal-siba" element={<AdminDashboard />} />
 
         {/* Fallback Catch */}
         <Route path="*" element={<Navigate to="/login" replace />} />

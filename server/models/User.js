@@ -12,7 +12,10 @@ const userSchema = new mongoose.Schema({
     password: { type: String, required: true },
     role: { type: String, enum: ['student', 'freelancer', 'admin'], default: 'student' },
     skills: [{ type: String }],
+    bio: { type: String },
     walletBalance: { type: Number, default: 0 },
+    totalCompletedTasks: { type: Number, default: 0 },
+    averageRating: { type: Number, default: 0 },
     pendingBalance: { type: Number, default: 0 }, // Funds currently tied up in escrow
 
     //TWO EXACT PARAMETERS FOR SECURE OTP RESET CHANNELS

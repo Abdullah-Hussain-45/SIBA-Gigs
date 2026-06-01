@@ -14,12 +14,14 @@ export const protectRoute = (req, res, next) => {
             req.user = decoded; // Appends { id, role } to current req scope
             
             next();
+            return; // Ensure no further code execution after successful authentication
         } catch (error) {
             return res.status(401).json({ success: false, message: 'Session expired or invalid token architecture.' });
         }
     }
 
     if (!token) {
+        console.log(">>>> ❌ [AUTH DEBUG]: Blocked! Token completely missing in request headers.");
         return res.status(401).json({ success: false, message: 'Access Denied: Token missing.' });
     }
 };

@@ -1,51 +1,75 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../context/AuthContext.jsx';
-import Navbar from '../components/Navbar.jsx'; 
+import Navbar from '../components/Navbar.jsx';
 import TaskModal from '../components/TaskModal.jsx';
-import BidModal from '../components/BidModal.jsx'; 
+import BidModal from '../components/BidModal.jsx';
+import TopUpModal from '../components/TopUpModal.jsx';
+import toast from 'react-hot-toast';
+import WalletModal from '../components/WalletModal.jsx';
 
 export default function Dashboard() {
     const { token, user } = useContext(AuthContext);
     const [jobs, setJobs] = useState([]);
     const [wallet, setWallet] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [isModalOpen, setIsModalOpen] = useState(false); 
-    const [isBidModalOpen, setIsBidModalOpen] = useState(false); 
-    const [selectedJob, setSelectedJob] = useState(null); 
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isBidModalOpen, setIsBidModalOpen] = useState(false);
+    const [selectedJob, setSelectedJob] = useState(null);
+    const [deletingJobId, setDeletingJobId] = useState(null);
+    const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+    const [isWithdrawalOpen, setIsWithdrawalOpen] = useState(false);
+    const [walletBalance, setWalletBalance] = useState(user?.walletBalance || 0);
 
+    const handleWithdrawalSuccess = (withdrawnAmount) => {
+        setWalletBalance((prev) => prev - withdrawnAmount);
+        fetchWallet(); // Sync background system state
+    };
+
+    // 🟢 Fetch dynamic feed data (Memoized with useCallback)
+    const fetchJobs = useCallback(async () => {
+        try {
+            const res = await fetch('http://localhost:5000/api/jobs/open-feed', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.success) setJobs(data.jobs);
+        } catch (err) {
+            console.error('Jobs feed pipeline offline');
+        }
+    }, [token]);
+
+    // 🟢 Fetch Wallet Ledger (Extracted from useEffect for multi-use)
+    const fetchWallet = useCallback(async () => {
+        try {
+            const res = await fetch('http://localhost:5000/api/payments/wallet', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.success) {
+                setWallet(data.wallet.walletBalance);
+                setWalletBalance(data.wallet.walletBalance);
+            }
+        } catch (err) {
+            console.error('Wallet ledger offline');
+        }
+    }, [token]);
+
+    // Pipeline Orchestration with Safety Cleanup
     useEffect(() => {
-        // 1. Fetch Open Jobs Feed from server
-        const fetchJobs = async () => {
-            try {
-                const res = await fetch('http://localhost:5000/api/jobs/open-feed', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await res.json();
-                if (data.success) setJobs(data.jobs);
-            } catch (err) {
-                console.error("Jobs feed pipeline offline");
-            }
-        };
-
-        // 2. Fetch Wallet Balance securely
-        const fetchWallet = async () => {
-            try {
-                const res = await fetch('http://localhost:5000/api/payments/wallet', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await res.json();
-                if (data.success) setWallet(data.wallet.walletBalance);
-            } catch (err) {
-                console.error("Wallet ledger offline");
-            }
-        };
+        let isMounted = true;
 
         if (token) {
-            Promise.all([fetchJobs(), fetchWallet()]).then(() => setLoading(false));
+            Promise.all([fetchJobs(), fetchWallet()]).then(() => {
+                if (isMounted) setLoading(false);
+            });
         } else {
             setLoading(false);
         }
-    }, [token]);
+
+        return () => {
+            isMounted = false; // Prevents state updates on unmounted component
+        };
+    }, [token, fetchJobs, fetchWallet]);
 
     // Task posting backend sync channel
     const handleTaskPosted = async (taskData) => {
@@ -60,118 +84,258 @@ export default function Dashboard() {
             });
             const data = await res.json();
             if (data.success) {
-                alert('Task broadcasted successfully onto campus matrix feed!');
-                window.location.reload();
+                toast.success('Task posted onto campus feed successfully!', {
+                    style: { background: '#111827', color: '#fff', border: '1px solid #10b981' }
+                });
+                setIsModalOpen(false);
+                fetchJobs();
+                fetchWallet(); // Sync dynamic wallet deduction if applicable
+            } else {
+                toast.error(data.message || 'Failed to post task. Check category or fields.');
             }
         } catch (err) {
-            console.error("Failed to sync task onto backend stream");
+            console.error('Failed to sync task onto backend stream');
+            toast.error('Server connection lost.');
         }
     };
 
-    // Single source of truth for bid submission
+    // DELETE TASK Confirmation & Pipeline
+    const handleDeleteJob = async (jobId) => {
+        toast((t) => (
+            <div className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-white">Permanently delete this task?</span>
+                <p className="text-xs text-gray-400">All associated bids will also be removed.</p>
+                <div className="flex gap-2 mt-1">
+                    <button
+                        onClick={async () => {
+                            toast.dismiss(t.id);
+                            await executeDelete(jobId);
+                        }}
+                        className="flex-1 px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white text-xs font-semibold rounded-md transition-colors"
+                    >
+                        Yes, Delete
+                    </button>
+                    <button
+                        onClick={() => toast.dismiss(t.id)}
+                        className="flex-1 px-3 py-1.5 bg-[#2a2a33] hover:bg-[#333] text-gray-300 text-xs font-medium rounded-md transition-colors"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        ), {
+            duration: 8000,
+            style: { background: '#1a1a22', border: '1px solid #ef444440', color: '#fff', padding: '14px' }
+        });
+    };
+
+    const executeDelete = async (jobId) => {
+        setDeletingJobId(jobId);
+        try {
+            const res = await fetch(`http://localhost:5000/api/jobs/delete/${jobId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                setJobs((prevJobs) => prevJobs.filter((job) => job._id !== jobId));
+                toast.success('Task removed successfully.', {
+                    icon: '🗑️',
+                    style: { background: '#111827', color: '#fff', border: '1px solid #ef4444' }
+                });
+                fetchWallet(); // Sync potential escrow refunds
+            } else {
+                toast.error(data.message || 'Deletion failed. Access denied.');
+            }
+        } catch (err) {
+            console.error('Delete pipeline error:', err);
+            toast.error('Server synchronization lost during deletion.');
+        } finally {
+            setDeletingJobId(null);
+        }
+    };
+
     const handleBidSubmit = async (bidPayload) => {
         try {
+            const activeToken = token || localStorage.getItem('token');
+            if (!activeToken) {
+                toast.error('Session token missing. Please login again.');
+                return;
+            }
+
             const res = await fetch('http://localhost:5000/api/bids/create', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Authorization': `Bearer ${activeToken}`
                 },
                 body: JSON.stringify(bidPayload)
             });
+
             const data = await res.json();
+
             if (data.success) {
-                alert('Proposal successfully registered and dispatched to student!');
-                window.location.reload();
+                toast.success('Proposal successfully registered and dispatched!', {
+                    style: { background: '#111827', color: '#fff', border: '1px solid #10b981' }
+                });
+                setIsBidModalOpen(false);
             } else {
-                alert(data.message || 'Bid submission rejected.');
+                toast.error(data.message || 'Bid submission rejected.');
             }
         } catch (err) {
-            console.error("Bidding transaction pipeline offline");
+            console.error('Bidding transaction pipeline offline:', err);
+            toast.error('Server synchronization lost.');
         }
     };
 
+    // Full screen loading skeletal state
     if (loading) {
         return (
-            <div className="min-h-screen bg-[#0f0f12] flex items-center justify-center text-emerald-400 font-mono tracking-widest text-xs">
-                INITIALIZING TERMINAL DATA PIPELINE...
+            <div className="fixed inset-0 z-50 flex flex-col items-center justify-center w-screen h-screen bg-black space-y-4">
+                <div className="w-9 h-9 border-2 border-emerald-500/10 border-t-emerald-500 rounded-full animate-spin"></div>
+                <p className="text-[11px] text-gray-500 font-mono tracking-widest uppercase animate-pulse">
+                    Loading Records...
+                </p>
             </div>
         );
     }
 
     return (
         <div className="min-h-screen bg-[#0f0f12] text-gray-200 font-sans">
-            <Navbar walletBalance={wallet} />
+            <Navbar walletBalance={walletBalance} />
 
             <main className="max-w-7xl mx-auto px-6 py-8">
-                <div className="flex justify-between items-center mb-8">
+                
+                {/* 💳 TOP BOX CONTAINER: Conditional actions for Student and Freelancer */}
+                <div className="flex justify-between items-center mb-8 bg-[#131317] p-6 rounded-xl border border-zinc-900 shadow-sm">
                     <div>
-                        <h1 className="text-2xl font-bold text-white tracking-tight">Active Assignments Feed</h1>
-                        <p className="text-gray-400 text-xs mt-1">Real-time peer-to-peer task ecosystem inside Sukkur IBA</p>
+                        <h1 className="text-2xl font-bold text-white tracking-tight">Available Gigs</h1>
+                        <p className="text-gray-400 text-xs mt-1">Explore active tasks posted by students across Sukkur IBA.</p>
                     </div>
-                    
-                    {/* Show "+ Post New Job" only if user is logged in as a student */}
+
+                    {/* 🟢 STUDENT VIEW CONTROLS */}
                     {user?.role === 'student' && (
-                        <button 
-                            onClick={() => setIsModalOpen(true)} 
-                            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg text-sm transition-colors shadow-lg shadow-emerald-900/20 cursor-pointer"
-                        >
-                            + Post New Task
-                        </button>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => setIsTopUpOpen(true)}
+                                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg text-sm transition-all cursor-pointer shadow-lg shadow-emerald-900/10 active:scale-[0.98]"
+                            >
+                                + Add Funds
+                            </button>
+                            <button
+                                onClick={() => setIsModalOpen(true)}
+                                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg text-sm transition-all cursor-pointer shadow-lg shadow-emerald-900/10 active:scale-[0.98]"
+                            >
+                                + Post New Task
+                            </button>
+                        </div>
+                    )}
+
+                    {/* ⚡ FREELANCER VIEW CONTROLS: Added Live Available Earnings Widget */}
+                    {user?.role === 'freelancer' && (
+                        <div className="flex items-center gap-4 bg-[#18181c] px-4 py-2 rounded-lg border border-zinc-800">
+                            <div className="text-right">
+                                <span className="text-[10px] text-zinc-500 block font-mono uppercase tracking-wider">Available Balance</span>
+                                <span className="text-sm font-bold text-emerald-400 font-mono">Rs. {walletBalance}</span>
+                            </div>
+                            <button
+                                onClick={() => setIsWithdrawalOpen(true)}
+                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-md transition-all cursor-pointer active:scale-[0.97]"
+                            >
+                                Withdraw Funds
+                            </button>
+                        </div>
                     )}
                 </div>
 
+                {/* 📋 GIGS FEED GRID */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {jobs.length === 0 ? (
-                        <div className="col-span-full bg-[#16161a] border border-dashed border-[#24242b] rounded-xl p-12 text-center text-gray-500 font-mono text-sm">
-                            --- NO ACTIVE TASKS ON CAMPUS FEED RIGHT NOW ---
+                        <div className="col-span-full bg-[#121215]/80 backdrop-blur-md border border-[#24242b] rounded-xl p-12 text-center text-gray-500 font-mono text-sm tracking-wide">
+                            No active projects logged right now.
                         </div>
                     ) : (
                         jobs.map((job) => {
-                            // Extracting exact IDs cleanly to prevent mismatch errors
-                            const ownerId = job.clientId?._id || job.clientId;
+                            const ownerId = job.client?._id || job.client;
                             const currentUserId = user?._id || user?.id;
                             const isOwner = String(ownerId) === String(currentUserId);
+                            const isDeleting = deletingJobId === job._id;
 
                             return (
-                                <div key={job._id} className="bg-[#16161a] border border-[#24242b] hover:border-emerald-500/40 rounded-xl p-6 transition-all shadow-xl flex flex-col justify-between">
+                                <div
+                                    key={job._id}
+                                    className={`bg-[#121215]/90 backdrop-blur-sm border rounded-xl p-6 transition-all shadow-xl flex flex-col justify-between ${
+                                        isDeleting
+                                            ? 'border-red-900/60 opacity-50 pointer-events-none'
+                                            : isOwner
+                                            ? 'border-amber-500/20 hover:border-amber-500/40'
+                                            : 'border-[#24242b] hover:border-emerald-500/30'
+                                    }`}
+                                >
                                     <div>
                                         <div className="flex justify-between items-start mb-4">
-                                            <span className="px-2 py-0.5 text-[10px] font-mono rounded bg-emerald-950/60 border border-emerald-800 text-emerald-400 uppercase">
+                                            <span className="px-2 py-0.5 text-[10px] font-mono rounded bg-emerald-950/60 border border-emerald-800 text-emerald-400 uppercase tracking-wider">
                                                 {job.category}
                                             </span>
                                             <span className="text-emerald-400 font-mono font-bold">
-                                                Rs. {job.budget}
+                                                Rs. {job.budget.toLocaleString()}
                                             </span>
                                         </div>
                                         <h3 className="text-base font-bold text-white mb-2">{job.title}</h3>
                                         <p className="text-gray-400 text-xs line-clamp-3 mb-6">{job.description}</p>
                                     </div>
-                                    
-                                    <div className="border-t border-[#24242b] pt-4 mt-auto flex justify-between items-center">
-                                        <div className="text-[11px]">
+
+                                    <div className="border-t border-[#24242b] pt-4 mt-auto flex justify-between items-center gap-2">
+                                        <div className="text-[11px] min-w-0">
                                             <span className="text-gray-500 block">Posted by</span>
-                                            <span className="text-gray-300 font-medium">{job.clientId?.name || job.client?.name || "IBA Student"}</span>
+                                            <span className="text-gray-300 font-medium truncate block">
+                                                {job.client?.name || 'IBA Student'}
+                                            </span>
                                         </div>
 
-                                        {/* 🔥 STRICT UI FILTER: Freelancer dekh sakta hai agar task kisi aur ka ho */}
                                         {user?.role === 'freelancer' && !isOwner && (
-                                            <button 
+                                            <button
                                                 onClick={() => {
                                                     setSelectedJob(job);
                                                     setIsBidModalOpen(true);
                                                 }}
-                                                className="px-3 py-1.5 bg-[#1f1f26] hover:bg-emerald-600 border border-[#2e2e38] text-xs font-medium text-white rounded-md transition-all cursor-pointer"
+                                                className="px-3 py-1.5 bg-[#1f1f26] hover:bg-emerald-600 border border-[#2e2e38] text-xs font-medium text-white rounded-md transition-all cursor-pointer flex-shrink-0"
                                             >
-                                                Bid Task 🚀
+                                                Bid Task
                                             </button>
                                         )}
 
-                                        {/* 🔥 OWNER BADGE: Agar task user ka apna hi hai */}
                                         {isOwner && (
-                                            <span className="text-[10px] font-mono font-bold uppercase px-2 py-1 bg-[#1f1f26] border border-[#2e2e38] text-amber-400 rounded">
-                                                Your Posted Task 📌
-                                            </span>
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                <span className="text-[10px] font-mono font-bold uppercase px-2 py-1 bg-[#1f1f26] border border-[#2e2e38] text-amber-400 rounded">
+                                                    Your Task 📌
+                                                </span>
+
+                                                <button
+                                                    onClick={() => handleDeleteJob(job._id)}
+                                                    disabled={isDeleting}
+                                                    title="Delete this task"
+                                                    className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/60 border border-red-900 hover:border-red-700 text-red-400 hover:text-red-300 text-xs font-medium rounded-md transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+                                                >
+                                                    {isDeleting ? (
+                                                        <>
+                                                            <span className="w-3 h-3 border border-red-500 border-t-transparent rounded-full animate-spin inline-block" />
+                                                            <span>Deleting...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                <polyline points="3 6 5 6 21 6" />
+                                                                <path d="M19 6l-1 14H6L5 6" />
+                                                                <path d="M10 11v6M14 11v6" />
+                                                                <path d="M9 6V4h6v2" />
+                                                            </svg>
+                                                            <span>Delete</span>
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
@@ -181,13 +345,24 @@ export default function Dashboard() {
                 </div>
             </main>
 
+            {/* 🔒 INJECTED MODAL SUBSYSTEMS LAYER */}
             <TaskModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onTaskPosted={handleTaskPosted} />
 
-            <BidModal 
-                isOpen={isBidModalOpen} 
-                onClose={() => setIsBidModalOpen(false)} 
-                selectedJob={selectedJob} 
-                onBidSubmitted={handleBidSubmit} 
+            <BidModal
+                isOpen={isBidModalOpen}
+                onClose={() => setIsBidModalOpen(false)}
+                selectedJob={selectedJob}
+                onBidSubmitted={handleBidSubmit}
+            />
+
+            <TopUpModal isOpen={isTopUpOpen} onClose={() => setIsTopUpOpen(false)} onTopUpSuccess={fetchWallet} />
+
+            {/* ⚡ WalletModal dynamic re-route binding */}
+            <WalletModal 
+                isOpen={isWithdrawalOpen} 
+                onClose={() => setIsWithdrawalOpen(false)} 
+                currentBalance={walletBalance} 
+                onWithdrawalSuccess={handleWithdrawalSuccess} 
             />
         </div>
     );

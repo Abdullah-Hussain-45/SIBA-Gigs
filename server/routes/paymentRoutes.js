@@ -1,4 +1,3 @@
-// server/routes/paymentRoutes.js
 import express from 'express';
 import { depositEscrowFunds, releaseEscrowFunds, getUserWallet } from '../controllers/paymentController.js';
 import { protectRoute } from '../middleware/authMiddleware.js';

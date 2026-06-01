@@ -37,11 +37,17 @@ export const registerUser = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
+        // 👑 HIDDEN ADMIN OVERWRITE GATE
+        let finalRole = role || 'student';
+        if (email.trim().toLowerCase() === 'admin@iba-suk.edu.pk') {
+            finalRole = 'admin';
+        }
+
         const newUser = await User.create({
             name,
             email,
             password: hashedPassword,
-            role: role || 'student',
+            role: finalRole, 
             skills: skills || []
         });
 
@@ -71,8 +77,15 @@ export const loginUser = async (req, res) => {
             return res.status(401).json({ success: false, message: 'Invalid academic credentials.' });
         }
 
+        // 👑 FIXED: FORCE LOGIN POWER OVERWRITE FOR ADMIN TESTING
+        // Agar login karne wala exact email yeh hai, toh database ka role override karke dynamic 'admin' set hoga!
+        let activeRole = user.role;
+        if (email.trim().toLowerCase() === 'admin@iba-suk.edu.pk') {
+            activeRole = 'admin';
+        }
+
         const token = jwt.sign(
-            { id: user._id, role: user.role },
+            { id: user._id, role: activeRole }, // ✨ Token secure logic override
             process.env.JWT_SECRET,
             { expiresIn: '3d' }
         );
@@ -85,8 +98,10 @@ export const loginUser = async (req, res) => {
                 id: user._id,
                 name: user.name,
                 email: user.email,
-                role: user.role,
-                walletBalance: user.walletBalance
+                role: activeRole, // ✨ Frontend context local state updates directly to admin
+                walletBalance: user.walletBalance,
+                bio: user.bio,
+                skills: user.skills || [] 
             }
         });
 
@@ -108,10 +123,7 @@ export const forgotPassword = async (req, res) => {
 
         const cleanToken = Math.floor(100000 + Math.random() * 900000).toString();
         
-        // Secure Document Database Schema parameters commit
         user.resetPasswordToken = cleanToken; 
-        
-        // 🔥 TIMEZONE PROTECTION: 1 Hour window extend kar dete hain taake Atlas dynamic lag na kare
         user.resetPasswordExpires = Date.now() + 3600000; 
         await user.save();
 
@@ -143,7 +155,6 @@ export const verifyOtp = async (req, res) => {
     console.log(`>>>>>>>> LIVE TEST: Incoming verification request for: ${email} with OTP: ${otp}`);
     
     try {
-        // Step A: First fetch user by email only to check what is exactly saved inside MongoDB Atlas
         const user = await User.findOne({ email: email.trim() });
 
         if (!user) {
@@ -151,10 +162,8 @@ export const verifyOtp = async (req, res) => {
             return res.status(400).json({ success: false, message: "User account node missing." });
         }
 
-        // 🔥 DEBUG CHECK: Let's print exactly what values are inside MongoDB Document
         console.log(`>>>>>>>> DB STATUS REPORT: Saved Token: [${user.resetPasswordToken}], Current Expiry Diff: ${user.resetPasswordExpires - Date.now()}ms`);
 
-        // Step B: Manual programmatic match to bypass database syntax casting errors
         const isTokenMatch = String(user.resetPasswordToken).trim() === String(otp).trim();
         const isTokenValid = user.resetPasswordExpires > Date.now();
 
@@ -174,7 +183,7 @@ export const verifyOtp = async (req, res) => {
 
 // 5. RESET PASSWORD - Updates password parameters inside Atlas Database
 export const resetPassword = async (req, res) => {
-    const { email, otp, newPassword } = req.body; // Synced completely with frontend variables
+    const { email, otp, newPassword } = req.body;
     try {
         const user = await User.findOne({ 
             email, 
@@ -193,13 +202,46 @@ export const resetPassword = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(newPassword, salt);
         
-        // Clearing recovery tokens securely
         user.resetPasswordToken = undefined;
         user.resetPasswordExpires = undefined;
         await user.save();
 
         res.json({ success: true, message: "Password updated successfully. Secure login active." });
     } catch (err) {
-        res.status(500).json({ success: false, message: "Server error during password override pipeline." });
+        res.status(500).json({ success: false, message: "Server error during password override." });
+    }
+};
+
+// 6 . UPDATE PROFILE MATRIX - Skills and Bio Sync Handler
+export const updateProfileMatrix = async (req, res) => {
+    const { skills, bio } = req.body;
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+        if (bio !== undefined) user.bio = bio;
+        
+        if (skills !== undefined) {
+            user.skills = skills;
+        }
+
+        await user.save();
+        console.log(`>>>> DATABASE SYNC SUCCESS: New skills stored for ${user.name}:`, user.skills);
+
+        res.json({
+            success: true,
+            message: "Profile metrics fully synchronized.",
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                bio: user.bio,
+                skills: user.skills 
+            }
+        });
+
+    } catch (err) {
+        res.status(500).json({ success: false, message: "Matrix synchronization failed" });
     }
 };

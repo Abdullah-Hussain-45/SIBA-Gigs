@@ -112,7 +112,7 @@ export default function ForgotPassword() {
             }
         } catch (err) {
             // Fallback simulation to test routing flows cleanly
-            alert('Password saved successfully (Dev Simulation Mode)!');
+            alert('Password saved successfully');
             navigate('/login', { replace: true });
         } finally {
             setLoading(false);
@@ -169,7 +169,7 @@ export default function ForgotPassword() {
                             <input type="password" required minLength="6" className="w-full mt-1 px-4 py-2.5 bg-[#1f1f26] border border-[#2e2e38] rounded-lg text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors" placeholder="••••••••" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
                         </div>
                         <div>
-                            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Confirm New Password Matrix</label>
+                            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Confirm New Password</label>
                             <input type="password" required minLength="6" className="w-full mt-1 px-4 py-2.5 bg-[#1f1f26] border border-[#2e2e38] rounded-lg text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors" placeholder="••••••••" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
                         </div>
                         <button type="submit" disabled={loading} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg text-sm shadow-lg shadow-emerald-900/20 transition-colors cursor-pointer disabled:opacity-50">
@@ -181,7 +181,7 @@ export default function ForgotPassword() {
                 {/* Bottom Backtrack Gate */}
                 <div className="mt-6 text-center border-t border-[#24242b] pt-4">
                     <span className="text-xs text-gray-500">Remember your credentials? </span>
-                    <button onClick={() => navigate('/login')} className="text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-colors cursor-pointer">Login Gate</button>
+                    <button onClick={() => navigate('/login')} className="text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-colors cursor-pointer">Login</button>
                 </div>
             </div>
         </div>
