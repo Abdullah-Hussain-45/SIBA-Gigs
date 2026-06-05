@@ -116,7 +116,7 @@ export const requestWithdrawal = async (req, res) => {
             paymentMethod: String(paymentMethod || 'easypaisa' || 'jazzcash').toLowerCase(),
             accountNumber: String(accountNumber),
             accountTitle: String(accountTitle || accountName),
-            accountName: String(accountName || accountTitle ||) // Fallback matching reference
+            accountName: String(accountName || accountTitle ) // Fallback matching reference
         };
 
         // Ledger entry creation loop

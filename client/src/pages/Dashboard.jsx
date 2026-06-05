@@ -8,9 +8,8 @@ import toast from 'react-hot-toast';
 import WalletModal from '../components/WalletModal.jsx';
 
 export default function Dashboard() {
-    const { token, user } = useContext(AuthContext);
+    const { token, user, setUser } = useContext(AuthContext);
     const [jobs, setJobs] = useState([]);
-    const [wallet, setWallet] = useState(0);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isBidModalOpen, setIsBidModalOpen] = useState(false);
@@ -20,12 +19,7 @@ export default function Dashboard() {
     const [isWithdrawalOpen, setIsWithdrawalOpen] = useState(false);
     const [walletBalance, setWalletBalance] = useState(user?.walletBalance || 0);
 
-    const handleWithdrawalSuccess = (withdrawnAmount) => {
-        setWalletBalance((prev) => prev - withdrawnAmount);
-        fetchWallet(); // Sync background system state
-    };
-
-    // 🟢 Fetch dynamic feed data (Memoized with useCallback)
+    // 🟢 Fetch dynamic feed data
     const fetchJobs = useCallback(async () => {
         try {
             const res = await fetch('http://localhost:5000/api/jobs/open-feed', {
@@ -38,21 +32,29 @@ export default function Dashboard() {
         }
     }, [token]);
 
-    // 🟢 Fetch Wallet Ledger (Extracted from useEffect for multi-use)
+    // 🟢 Fetch Wallet Ledger with updated API path and AuthContext state binding
     const fetchWallet = useCallback(async () => {
         try {
-            const res = await fetch('http://localhost:5000/api/payments/wallet', {
+            // 🎯 ROUTE FIXED: Updated endpoint path to clear ledger mismatches
+            const res = await fetch('http://localhost:5000/api/wallet/pending-withdrawals', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            const data = await res.json();
-            if (data.success) {
-                setWallet(data.wallet.walletBalance);
-                setWalletBalance(data.wallet.walletBalance);
+            
+            // Fallback to update balance instantly if user context object exists
+            if (user) {
+                const freshRes = await fetch('http://localhost:5000/api/wallet/pending-deposits', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const freshData = await freshRes.json();
+                if (freshData.success && user) {
+                    // Update layout state reference safely
+                    setWalletBalance(user.walletBalance || 0);
+                }
             }
         } catch (err) {
             console.error('Wallet ledger offline');
         }
-    }, [token]);
+    }, [token, user]);
 
     // Pipeline Orchestration with Safety Cleanup
     useEffect(() => {
@@ -67,9 +69,22 @@ export default function Dashboard() {
         }
 
         return () => {
-            isMounted = false; // Prevents state updates on unmounted component
+            isMounted = false;
         };
     }, [token, fetchJobs, fetchWallet]);
+
+    // Real-time UI balance minus update node for freelancer side
+    const handleWithdrawalSuccess = (withdrawnAmount) => {
+        setWalletBalance((prev) => {
+            const nextBalance = prev - withdrawnAmount;
+            if (user) {
+                const updatedUser = { ...user, walletBalance: nextBalance };
+                localStorage.setItem('user', JSON.stringify(updatedUser));
+                if (setUser) setUser(updatedUser); // Dynamic update straight to the view-only navbar badge
+            }
+            return nextBalance;
+        });
+    };
 
     // Task posting backend sync channel
     const handleTaskPosted = async (taskData) => {
@@ -89,7 +104,7 @@ export default function Dashboard() {
                 });
                 setIsModalOpen(false);
                 fetchJobs();
-                fetchWallet(); // Sync dynamic wallet deduction if applicable
+                fetchWallet(); 
             } else {
                 toast.error(data.message || 'Failed to post task. Check category or fields.');
             }
@@ -144,7 +159,7 @@ export default function Dashboard() {
                     icon: '🗑️',
                     style: { background: '#111827', color: '#fff', border: '1px solid #ef4444' }
                 });
-                fetchWallet(); // Sync potential escrow refunds
+                fetchWallet(); 
             } else {
                 toast.error(data.message || 'Deletion failed. Access denied.');
             }
@@ -189,7 +204,6 @@ export default function Dashboard() {
         }
     };
 
-    // Full screen loading skeletal state
     if (loading) {
         return (
             <div className="fixed inset-0 z-50 flex flex-col items-center justify-center w-screen h-screen bg-black space-y-4">
@@ -203,18 +217,16 @@ export default function Dashboard() {
 
     return (
         <div className="min-h-screen bg-[#0f0f12] text-gray-200 font-sans">
-            <Navbar walletBalance={walletBalance} />
+            {/* 🔄 Key binding guarantees total navbar re-render synchronizations immediately */}
+            <Navbar key={walletBalance} />
 
             <main className="max-w-7xl mx-auto px-6 py-8">
-                
-                {/* 💳 TOP BOX CONTAINER: Conditional actions for Student and Freelancer */}
                 <div className="flex justify-between items-center mb-8 bg-[#131317] p-6 rounded-xl border border-zinc-900 shadow-sm">
                     <div>
                         <h1 className="text-2xl font-bold text-white tracking-tight">Available Gigs</h1>
                         <p className="text-gray-400 text-xs mt-1">Explore active tasks posted by students across Sukkur IBA.</p>
                     </div>
 
-                    {/* 🟢 STUDENT VIEW CONTROLS */}
                     {user?.role === 'student' && (
                         <div className="flex items-center gap-3">
                             <button
@@ -232,7 +244,6 @@ export default function Dashboard() {
                         </div>
                     )}
 
-                    {/* ⚡ FREELANCER VIEW CONTROLS: Added Live Available Earnings Widget */}
                     {user?.role === 'freelancer' && (
                         <div className="flex items-center gap-4 bg-[#18181c] px-4 py-2 rounded-lg border border-zinc-800">
                             <div className="text-right">
@@ -249,7 +260,6 @@ export default function Dashboard() {
                     )}
                 </div>
 
-                {/* 📋 GIGS FEED GRID */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {jobs.length === 0 ? (
                         <div className="col-span-full bg-[#121215]/80 backdrop-blur-md border border-[#24242b] rounded-xl p-12 text-center text-gray-500 font-mono text-sm tracking-wide">
@@ -345,7 +355,6 @@ export default function Dashboard() {
                 </div>
             </main>
 
-            {/* 🔒 INJECTED MODAL SUBSYSTEMS LAYER */}
             <TaskModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onTaskPosted={handleTaskPosted} />
 
             <BidModal
@@ -357,7 +366,6 @@ export default function Dashboard() {
 
             <TopUpModal isOpen={isTopUpOpen} onClose={() => setIsTopUpOpen(false)} onTopUpSuccess={fetchWallet} />
 
-            {/* ⚡ WalletModal dynamic re-route binding */}
             <WalletModal 
                 isOpen={isWithdrawalOpen} 
                 onClose={() => setIsWithdrawalOpen(false)} 

@@ -1,0 +1,66 @@
+========================================================================
+SIBA GIGS - SYSTEM REQUIREMENTS & RUN GUIDE
+========================================================================
+
+------------------------------------------------------------------------
+1. PREREQUISITES (System mein kya installed hona chahiye)
+------------------------------------------------------------------------
+* Node.js (Version 18.0.0 ya usse upar)
+* npm (Node Package Manager - Node ke sath khud hi aa jata hai)
+* MongoDB Cloud Atlas Account (Database hosting ke liye)
+* Modern Web Browser (Chrome, Edge, ya Brave)
+
+------------------------------------------------------------------------
+2. SYSTEM DEPENDENCIES (Project ko chalane ke liye zaroori packages)
+------------------------------------------------------------------------
+
+A. BACKEND ENVIRONMENT PACKAGES (Located inside /server)
+   * express      -> Web framework router endpoints setup karne ke liye.
+   * mongoose     -> MongoDB schemas aur queries pipeline chalane ke liye.
+   * multer       -> Student deposit vouchers aur receipts file upload ke liye.
+   * jsonwebtoken -> Secure token validation aur login sessions ke liye.
+   * bcryptjs     -> User passwords ko safe hash rakhne ke liye.
+   * cors         -> Cross-Origin resource connections allow karne ke liye.
+   * dotenv       -> Environment environment variables (.env) safe rakhne ke liye.
+
+B. FRONTEND UI PACKAGES (Located inside /client)
+   * react        -> Main interface engine framework.
+   * react-dom    -> Component tree visual elements binding ke liye.
+   * react-router-dom -> Routes management aur page tracking ke liye.
+   * axios        -> Multipart payload forms ko backend endpoints par bhejney ke liye.
+   * react-hot-toast -> Transaction state updates aur alerts popups ke liye.
+
+------------------------------------------------------------------------
+3. STEP-BY-STEP RUN GUIDE (Project ko kaise chalayein)
+------------------------------------------------------------------------
+
+STEP 1: DATABASE ENVIRONMENT SET UP
+-----------------------------------
+Sabse pehle '/server' folder ke andar ek file banayein jiska naam rakhein '.env' 
+Aur usme ye details dakhil karein:
+
+PORT=5000
+MONGO_URI=aapka_mongodb_atlas_connection_string
+JWT_SECRET=aapka_koi_bhi_secret_secure_key
+
+STEP 2: STARTING THE BACKEND SERVER
+-----------------------------------
+Terminal / Command Prompt kholein aur ye commands run karein:
+1. cd server
+2. npm install         (Is se saari backend dependencies automatic install ho jayengi)
+3. npm run dev         (Is se backend server localhost:5000 par live chal parega)
+
+STEP 3: STARTING THE FRONTEND CLIENT
+-----------------------------------
+Ek parallel naya terminal panel kholein aur ye commands run karein:
+1. cd client
+2. npm install         (Is se saari frontend dependencies automatic install ho jayengi)
+3. npm run dev         (Is se front-end compile ho kar localhost:5173 par live chal parega)
+
+------------------------------------------------------------------------
+4. CORE ADMIN CREDS & SYSTEM CONFIGURATION
+------------------------------------------------------------------------
+* App Target Environment: Sandbox testing and manual ledger audits.
+* Admin Panel Endpoint : /admin-portal-siba
+* Allowed Gateways     : EasyPaisa, JazzCash, NayaPay, Bank Transfer
+========================================================================

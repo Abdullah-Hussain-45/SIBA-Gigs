@@ -207,15 +207,11 @@ export default function Navbar() {
                     </div>
                 )}
 
-                {/* DYNAMIC CLICKABLE WALLET DISPLAY ELEMENT */}
-                <button 
-                    onClick={() => setIsWalletOpen(true)}
-                    className="bg-[#1f1f26] border border-[#2e2e38] hover:border-emerald-500/40 rounded-lg px-3 py-1.5 flex items-center space-x-2 transition-all cursor-pointer group"
-                >
-                    <span className="text-[10px] font-semibold text-gray-400 group-hover:text-gray-200 uppercase tracking-wider hidden md:block">Wallet</span>
+                {/* 👑 FIXED: VIEW-ONLY WALLET CHIP (No click modals anymore!) */}
+                <div className="bg-[#1f1f26] border border-[#2e2e38] rounded-lg px-3 py-1.5 flex items-center space-x-2 cursor-default select-none">
+                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider hidden md:block">Wallet</span>
                     <span className="text-emerald-400 font-bold font-mono text-xs sm:text-sm">Rs.{balance}</span>
-                    <span className="text-[10px] text-gray-600 group-hover:text-emerald-400 ml-0.5">➕</span>
-                </button>
+                </div>
 
                 {/* 🏠 FEED BUTTON */}
                 <button
@@ -249,14 +245,6 @@ export default function Navbar() {
                     Logout
                 </button>
             </div>
-
-            {/* MOUNTED WALLET MODAL VIEW FOR LOCAL DEPOSITS */}
-            <WalletModal 
-                isOpen={isWalletOpen} 
-                onClose={() => setIsWalletOpen(false)} 
-                currentBalance={balance}
-                onRefreshBalance={fetchBalanceSelf}
-            />
         </nav>
     );
 }

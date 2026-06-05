@@ -1,15 +1,18 @@
 import mongoose from 'mongoose';
 
 const depositSchema = new mongoose.Schema({
-    userId: {
+    // ✨ FIXED: 'userId' ko badal kar 'user' kar diya taake controller aur population loop crash na ho
+    user: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
     },
-    method: {
+    // ✨ FIXED: 'method' ko 'paymentMethod' kiya taake req.body se direct matching ho sake
+    paymentMethod: {
         type: String,
         enum: ['easypaisa', 'jazzcash', 'bank'],
-        required: true
+        required: true,
+        lowercase: true // Automatic string ko lowercase rakhega
     },
     amount: {
         type: Number,
@@ -22,10 +25,16 @@ const depositSchema = new mongoose.Schema({
         unique: true,
         trim: true
     },
+    // 📸 Student ke liye voucher image link table reference
+    paymentVoucherUrl: {
+        type: String,
+        required: true
+    },
+    // ✨ FIXED: Default status ko 'pending' kiya taake admin pehle raseed manually verify kare!
     status: {
         type: String,
         enum: ['pending', 'approved', 'rejected'],
-        default: 'approved' // Auto-approved for frictionless sandbox testing
+        default: 'pending' 
     }
 }, { timestamps: true });
 
